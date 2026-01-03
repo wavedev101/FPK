@@ -1,11 +1,13 @@
-CC = x86_64-w64-mingw32-gcc
-CFLAGS = -O2 -Wall
-BUILDDIR = build
+CC ?= gcc
+CFLAGS ?= -O2 -Wall
+BUILDDIR := build
+TARGET := fpk64
+EXEEXT := $(if $(filter Windows_NT,$(OS)),.exe,)
 
-SRCS = fpk.c fpk_main.c
-OBJS = $(addprefix $(BUILDDIR)/,$(SRCS:.c=.o))
+SRCS := fpk.c fpk_main.c
+OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 
-all: $(BUILDDIR)/fpk64.exe
+all: $(BUILDDIR)/$(TARGET)$(EXEEXT)
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -13,8 +15,10 @@ $(BUILDDIR):
 $(BUILDDIR)/%.o: %.c fpk.h | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/fpk64.exe: $(OBJS)
+$(BUILDDIR)/$(TARGET)$(EXEEXT): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
 	rm -rf $(BUILDDIR)
+
+.PHONY: all clean
