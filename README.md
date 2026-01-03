@@ -25,4 +25,5 @@ sudo dnf install make gcc
 
 # macOS (via Homebrew)
 brew install make gcc
-
+```
+- Note: this project is hobby project so beware i dont publish all the build nor code mostly when i need to.
