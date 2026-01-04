@@ -8,7 +8,7 @@ Forgot about this project whas on github 😭
 Before building **FPK**, make sure you have the following installed:
 
 - **Make** — used to automate the build process.  
-- **C Compiler** — such as `gcc`, `clang`, or another compatible compiler.
+- **C Compiler** — such as `gcc`,or another compatible compiler.
 
 ## Installation
 
