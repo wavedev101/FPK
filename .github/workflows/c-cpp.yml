@@ -18,7 +18,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
@@ -26,6 +31,7 @@ jobs:
     # ---------------- VERSION ----------------
     - name: Set version
       id: version
+      shell: bash
       run: |
         if [ ! -f VERSION ]; then
           echo "0.0" > VERSION
@@ -47,36 +53,75 @@ jobs:
 
         echo "version=$newver" >> $GITHUB_OUTPUT
 
-    # ---------------- CCACHE ----------------
-    - name: Install deps + ccache
+    # ---------------- LINUX ----------------
+    - name: Install deps (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential ccache
 
-    - name: Setup ccache
+    - name: Setup ccache (Linux)
+      if: runner.os == 'Linux'
       run: |
-        echo "max_size = 500M" > ~/.ccache/ccache.conf
+        mkdir -p ~/.ccache
+        ccache --set-config=max_size=500M
         echo "/usr/lib/ccache" >> $GITHUB_PATH
 
-    - name: Cache ccache
+    - name: Cache ccache (Linux)
+      if: runner.os == 'Linux'
       uses: actions/cache@v4
       with:
         path: ~/.ccache
-        key: ccache-${{ runner.os }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h') }}
+        key: ccache-linux-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h') }}
         restore-keys: |
-          ccache-${{ runner.os }}-
+          ccache-linux-
 
-    # ---------------- BUILD ----------------
-    - name: Build
+    - name: Build (Linux)
+      if: runner.os == 'Linux'
       run: |
         export CC="ccache gcc"
         export CXX="ccache g++"
+        make -j$(nproc)
 
+    # ---------------- WINDOWS ----------------
+    - name: Setup MSYS2
+      if: runner.os == 'Windows'
+      uses: msys2/setup-msys2@v2
+      with:
+        update: false
+        msystem: MINGW64
+        install: >
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-make
+          mingw-w64-x86_64-ccache
+
+    - name: Setup ccache (Windows)
+      if: runner.os == 'Windows'
+      shell: msys2 {0}
+      run: |
+        mkdir -p ~/.ccache
+        ccache --set-config=max_size=500M
+
+    - name: Cache ccache (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: C:\msys64\home\runneradmin\.ccache
+        key: ccache-windows-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h') }}
+        restore-keys: |
+          ccache-windows-
+
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      shell: msys2 {0}
+      run: |
+        export CC="ccache gcc"
+        export CXX="ccache g++"
         make -j$(nproc)
 
     # ---------------- STATS ----------------
     - name: ccache stats
-      run: ccache -s
+      run: ccache -s || true
 
     # ---------------- PACKAGE ----------------
     - name: Package
@@ -87,5 +132,5 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: snapshot-${{ steps.version.outputs.version }}
+        name: snapshot-${{ steps.version.outputs.version }}-${{ runner.os }}
         path: out/
