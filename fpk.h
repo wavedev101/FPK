@@ -7,7 +7,6 @@
   #define FPK_API
 #endif
 
-
 #define FPK_MAGIC      "FPK2"
 #define FPK_MAX_FILES  1024
 #define FPK_MAX_NAME   256
