@@ -1,72 +1,85 @@
-name: C/C++ Fast Build
+name: C/C++ Snapshot Build (Fast)
 
 on:
   push:
     branches: ["main"]
+    paths:
+      - '**.c'
+      - '**.cpp'
+      - '**.h'
+      - 'Makefile'
   pull_request:
     branches: ["main"]
+    paths:
+      - '**.c'
+      - '**.cpp'
+      - '**.h'
+      - 'Makefile'
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    # ---------------- LINUX ----------------
-    - name: Install deps (Linux)
-      if: runner.os == 'Linux'
+    # ---------------- VERSION ----------------
+    - name: Set version
+      id: version
+      run: |
+        if [ ! -f VERSION ]; then
+          echo "0.0" > VERSION
+        fi
+
+        ver=$(cat VERSION)
+        major=$(echo $ver | cut -d. -f1)
+        minor=$(echo $ver | cut -d. -f2)
+
+        minor=$((minor + 1))
+
+        if [ $minor -gt 10 ]; then
+          major=$((major + 1))
+          minor=1
+        fi
+
+        newver="$major.$minor"
+        echo $newver > VERSION
+
+        echo "version=$newver" >> $GITHUB_OUTPUT
+
+    # ---------------- CCACHE ----------------
+    - name: Install deps + ccache
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          autoconf automake libtool pkg-config
+        sudo apt-get install -y build-essential ccache
 
-    - name: Build (Linux)
-      if: runner.os == 'Linux'
+    - name: Setup ccache
       run: |
-        # Generate configure if missing
-        [ -f configure ] || autoreconf -i
+        echo "max_size = 500M" > ~/.ccache/ccache.conf
+        echo "/usr/lib/ccache" >> $GITHUB_PATH
 
-        ./configure CFLAGS="-O2 -pipe"
-        make -j$(nproc)
-
-    # ---------------- WINDOWS ----------------
-    - name: Setup MSYS2 (GCC + make)
-      if: runner.os == 'Windows'
-      uses: msys2/setup-msys2@v2
+    - name: Cache ccache
+      uses: actions/cache@v4
       with:
-        update: false
-        msystem: MINGW64
-        install: >
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-make
-          mingw-w64-x86_64-autoconf
-          mingw-w64-x86_64-automake
-          mingw-w64-x86_64-libtool
-          mingw-w64-x86_64-pkg-config
+        path: ~/.ccache
+        key: ccache-${{ runner.os }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h') }}
+        restore-keys: |
+          ccache-${{ runner.os }}-
 
-    - name: Build (Windows)
-      if: runner.os == 'Windows'
-      shell: msys2 {0}
+    # ---------------- BUILD ----------------
+    - name: Build
       run: |
-        # Ensure correct environment
-        export CC=gcc
-        export CXX=g++
+        export CC="ccache gcc"
+        export CXX="ccache g++"
 
-        [ -f configure ] || autoreconf -i
-
-        ./configure CFLAGS="-O2"
         make -j$(nproc)
+
+    # ---------------- STATS ----------------
+    - name: ccache stats
+      run: ccache -s
 
     # ---------------- PACKAGE ----------------
-    - name: Package output
+    - name: Package
       run: |
         mkdir -p out
         find . -type f \( -name "*.exe" -o -name "*.out" -o -name "*.bin" \) -exec cp {} out/ \; || true
@@ -74,5 +87,5 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: build-${{ runner.os }}
+        name: snapshot-${{ steps.version.outputs.version }}
         path: out/
